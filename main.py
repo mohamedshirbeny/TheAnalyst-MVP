@@ -102,7 +102,10 @@ def chat():
 
     # New commands include pagination and full-data browsing
     file_commands = {'show me the average', 'show head', 'show shape', 'describe data', 'show all data'}
-    if lower in file_commands or lower.startswith('show page'):
+    # Commands that start with 'plot' for visualization
+    plot_commands = lower.startswith('plot ')
+    
+    if lower in file_commands or lower.startswith('show page') or plot_commands:
         # find active file from session (if set), otherwise fall back to newest data file
         allowed_exts = ('.csv', '.txt', '.xls', '.xlsx')
         active = session.get('active_file')
@@ -224,11 +227,54 @@ def chat():
                 cache_df(df)
                 html, pagination = make_page(df, 1, page_size)
                 return jsonify({'response': html, 'pagination': pagination}), 200
+            elif lower.startswith('plot '):
+                # Extract column name from "plot column_name"
+                parts = lower.split()
+                if len(parts) < 2:
+                    return jsonify({'response': 'Usage: plot column_name'}), 200
+                col_name = parts[1]
+                if col_name not in df.columns:
+                    return jsonify({'response': f'Column "{col_name}" not found in dataset. Available columns: {", ".join(df.columns.tolist())}'}), 200
+                # Create histogram using plotly
+                try:
+                    import plotly.graph_objects as go
+                    fig = go.Figure(data=[go.Histogram(x=df[col_name], nbinsx=20)])
+                    fig.update_layout(
+                        title=f'Histogram of {col_name}',
+                        xaxis_title=col_name,
+                        yaxis_title='Frequency',
+                        height=400,
+                        hovermode='x unified'
+                    )
+                    html_plot = fig.to_html(include_plotlyjs='cdn', div_id='plot_histogram')
+                    return jsonify({'response': html_plot}), 200
+                except Exception as e:
+                    return jsonify({'response': f'Error creating plot: {str(e)}'}), 200
         except Exception as e:
             return jsonify({'response': f'Error processing DataFrame command: {str(e)}'}), 200
 
-    # default: echo
-    return jsonify({'response': f'You said: {msg}'}), 200
+    # AI preparation: for unknown commands, prepare data for AI processing
+    else:
+        try:
+            # Prepare basic data summary for AI context
+            api_key = os.environ.get('OPENAI_API_KEY')
+            if api_key:
+                # Placeholder: in real implementation, would call OpenAI API
+                # For now, return placeholder response
+                return jsonify({
+                    'answer': 'This is a placeholder for the AI response.',
+                    'model': 'openai',
+                    'message': msg,
+                    'data_summary': 'Data loaded and ready for analysis.'
+                }), 200
+            else:
+                # No API key configured
+                return jsonify({
+                    'answer': 'AI feature not configured. Please set OPENAI_API_KEY environment variable.',
+                    'model': 'none'
+                }), 200
+        except Exception as e:
+            return jsonify({'answer': f'Error: {str(e)}'}), 200
 
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False)
