@@ -258,23 +258,93 @@ def chat():
         try:
             # Prepare basic data summary for AI context
             api_key = os.environ.get('OPENAI_API_KEY')
-            if api_key:
-                # Placeholder: in real implementation, would call OpenAI API
-                # For now, return placeholder response
-                return jsonify({
-                    'answer': 'This is a placeholder for the AI response.',
-                    'model': 'openai',
-                    'message': msg,
-                    'data_summary': 'Data loaded and ready for analysis.'
-                }), 200
-            else:
+            if not api_key:
                 # No API key configured
                 return jsonify({
                     'answer': 'AI feature not configured. Please set OPENAI_API_KEY environment variable.',
                     'model': 'none'
                 }), 200
+            
+            # Load the active data file for context
+            allowed_exts = ('.csv', '.txt', '.xls', '.xlsx')
+            active = session.get('active_file')
+            files = [f for f in os.listdir(UPLOAD_FOLDER)
+                     if os.path.isfile(os.path.join(UPLOAD_FOLDER, f)) and f.lower().endswith(allowed_exts)]
+            
+            data_context = "No data file loaded."
+            if files:
+                if active and active in files:
+                    latest = active
+                else:
+                    latest = max(files, key=lambda f: os.path.getmtime(os.path.join(UPLOAD_FOLDER, f)))
+                latest_path = os.path.join(UPLOAD_FOLDER, latest)
+                
+                # Read dataframe for context
+                try:
+                    import io
+                    if latest_path.lower().endswith(('.csv', '.txt')):
+                        with open(latest_path, 'rb') as fh:
+                            raw = fh.read()
+                        try:
+                            text = raw.decode('utf-8')
+                        except Exception:
+                            text = raw.decode('utf-8', errors='replace')
+                        ai_df = pd.read_csv(io.StringIO(text))
+                    else:
+                        try:
+                            ai_df = pd.read_excel(latest_path)
+                        except Exception:
+                            with open(latest_path, 'rb') as fh:
+                                raw = fh.read()
+                            text = raw.decode('utf-8', errors='replace')
+                            import io as _io
+                            ai_df = pd.read_csv(_io.StringIO(text))
+                    
+                    # Get first 5 rows as context
+                    data_context = ai_df.head().to_string()
+                except Exception:
+                    data_context = "Could not load data file for context."
+            
+            # Call OpenAI API
+            from openai import OpenAI
+            client = OpenAI(api_key=api_key)
+            
+            system_prompt = """You are a data analyst assistant. Answer the user's question based ONLY on the provided data. 
+Be concise and direct in your analysis. If the data doesn't contain information to answer the question, say so clearly."""
+            
+            user_prompt = f"""Here is the first 5 rows of the uploaded data:
+
+{data_context}
+
+User question: {msg}
+
+Please answer this question based on the data provided."""
+            
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=500
+            )
+            
+            ai_answer = response.choices[0].message.content
+            
+            return jsonify({
+                'answer': ai_answer,
+                'model': 'gpt-4o',
+                'message': msg,
+                'data_loaded': data_context != "No data file loaded."
+            }), 200
+            
         except Exception as e:
-            return jsonify({'answer': f'Error: {str(e)}'}), 200
+            return jsonify({
+                'answer': f'Error calling AI model: {str(e)}',
+                'model': 'openai',
+                'error': True
+            }), 200
 
 if __name__ == '__main__':
     app.run(debug=True, use_reloader=False)
