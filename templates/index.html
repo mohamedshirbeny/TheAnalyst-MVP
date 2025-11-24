@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload & Chat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Upload a File</h1>
+    <form class="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
+        <input type="file" name="file" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <hr>
+
+    <h2>Files</h2>
+    <section id="file-management">
+        <div>
+            <button id="refresh-files">Refresh files</button>
+            <span id="active-file" style="margin-left:12px;font-weight:600;color:#333"></span>
+        </div>
+        <ul id="files-list"></ul>
+    </section>
+
+    <hr>
+
+    <h2>Chat</h2>
+    <div id="chat-container">
+        <div id="messages">
+            <!-- Messages will appear here -->
+        </div>
+
+        <form id="chat-form">
+            <input id="chat-input" type="text" placeholder="Type a message..." autocomplete="off">
+            <button id="chat-send" type="submit">Send</button>
+        </form>
+    </div>
+
+    <div id="pagination-controls" style="display:none; margin-top:12px;">
+        <button id="page-prev">Previous</button>
+        <span id="page-info" style="margin:0 12px">Page 1 of 1</span>
+        <button id="page-next">Next</button>
+    </div>
+
+    <script>
+        (function(){
+            const form = document.getElementById('chat-form');
+            const input = document.getElementById('chat-input');
+            const messages = document.getElementById('messages');
+            const filesList = document.getElementById('files-list');
+            const refreshBtn = document.getElementById('refresh-files');
+            const activeFileSpan = document.getElementById('active-file');
+            const paginationControls = document.getElementById('pagination-controls');
+            const pagePrev = document.getElementById('page-prev');
+            const pageNext = document.getElementById('page-next');
+            const pageInfo = document.getElementById('page-info');
+
+            let lastPagination = null; // store last pagination metadata
+            let activeFilename = null; // client-side active filename
+
+            function appendMessage(text, cls, opts){
+                const el = document.createElement('div');
+                el.className = cls === 'user' ? 'msg-user' : 'msg-bot';
+                if(opts && opts.html && cls === 'bot'){
+                    el.innerHTML = text;
+                } else {
+                    el.textContent = text;
+                }
+                messages.appendChild(el);
+                messages.scrollTop = messages.scrollHeight;
+            }
+
+            function setActiveFileLabel(name){
+                activeFilename = name || null;
+                if(name){
+                    activeFileSpan.textContent = `Active: ${name}`;
+                } else {
+                    activeFileSpan.textContent = '';
+                }
+                // re-render files to update highlight
+                // keep current list if available
+                const items = Array.from(filesList.querySelectorAll('li')).map(li => li.getAttribute('data-fn'));
+                if(items && items.length){
+                    renderFiles(items);
+                }
+            }
+
+            function renderFiles(list){
+                filesList.innerHTML = '';
+                list.forEach(fn => {
+                    const li = document.createElement('li');
+                    li.setAttribute('data-fn', fn);
+                    const nameSpan = document.createElement('span');
+                    nameSpan.textContent = fn;
+                    const right = document.createElement('span');
+                    const btn = document.createElement('button');
+                    btn.textContent = 'Select';
+                    btn.addEventListener('click', function(){
+                        selectFile(fn);
+                    });
+                    right.appendChild(btn);
+                    li.appendChild(nameSpan);
+                    li.appendChild(right);
+                    if(activeFilename && activeFilename === fn){
+                        li.classList.add('file-active');
+                    }
+                    filesList.appendChild(li);
+                });
+            }
+
+            function fetchSessionInfo(){
+                return fetch('/session_info')
+                    .then(r => r.json())
+                    .catch(err => {
+                        console.error('session_info error', err);
+                        return {active_file: null};
+                    });
+            }
+
+            function fetchFiles(){
+                fetch('/files')
+                    .then(r => r.json())
+                    .then(async data => {
+                        if(Array.isArray(data.files)){
+                            renderFiles(data.files);
+                            // after rendering files, get session active file from server
+                            const si = await fetchSessionInfo();
+                            if(si && si.active_file){
+                                setActiveFileLabel(si.active_file);
+                            }
+                        }
+                    })
+                    .catch(err => console.error('files error', err));
+            }
+
+            function selectFile(filename){
+                fetch('/select_file', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({filename})
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if(data && data.selected){
+                        setActiveFileLabel(data.selected);
+                        appendMessage(`Selected file: ${data.selected}`, 'bot');
+                        // clear any pagination UI
+                        lastPagination = null;
+                        paginationControls.style.display = 'none';
+                    } else if(data && data.error){
+                        appendMessage(`Error: ${data.error}`, 'bot');
+                    }
+                })
+                .catch(err => {
+                    appendMessage('Error selecting file', 'bot');
+                    console.error('select error', err);
+                });
+            }
+
+            // Intercept upload form to upload via fetch and refresh files + auto-select
+            const uploadForm = document.querySelector('.upload-form');
+            uploadForm.addEventListener('submit', function(e){
+                e.preventDefault();
+                const fileInput = uploadForm.querySelector('input[type="file"]');
+                if(!fileInput || !fileInput.files || fileInput.files.length === 0) return;
+                const file = fileInput.files[0];
+                const fd = new FormData();
+                fd.append('file', file);
+                fetch('/upload', { method: 'POST', body: fd })
+                    .then(r => r.text())
+                    .then(text => {
+                        appendMessage(`Upload: ${text}`, 'bot');
+                        // refresh file list and auto-select the newly uploaded file
+                        fetchFiles();
+                        // small timeout to allow list render
+                        setTimeout(() => selectFile(file.name), 300);
+                    })
+                    .catch(err => {
+                        appendMessage('Upload failed', 'bot');
+                        console.error('upload error', err);
+                    });
+            });
+
+            form.addEventListener('submit', function(e){
+                e.preventDefault();
+                const value = input.value.trim();
+                if(!value) return;
+                appendMessage(value, 'user');
+                input.value = '';
+                input.focus();
+
+                sendChat(value, {showUser:false});
+            });
+
+            function sendChat(message, opts){
+                opts = opts || {};
+                if(opts.showUser !== false){
+                    appendMessage(message, 'user');
+                }
+                return fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if(data && data.response){
+                        appendMessage(data.response, 'bot', {html:true});
+                    }
+                    if(data && data.pagination){
+                        lastPagination = data.pagination;
+                        pageInfo.textContent = `Page ${data.pagination.current_page} of ${data.pagination.total_pages}`;
+                        paginationControls.style.display = 'block';
+                        pagePrev.disabled = data.pagination.current_page <= 1;
+                        pageNext.disabled = data.pagination.current_page >= data.pagination.total_pages;
+                    } else {
+                        lastPagination = null;
+                        paginationControls.style.display = 'none';
+                    }
+                    return data;
+                })
+                .catch(err => {
+                    appendMessage('Error: could not reach server', 'bot');
+                    console.error('chat error', err);
+                });
+            }
+
+            // Allow Enter to send
+            input.addEventListener('keydown', function(e){
+                if(e.key === 'Enter' && !e.shiftKey){
+                    e.preventDefault();
+                    form.dispatchEvent(new Event('submit', {cancelable:true, bubbles:true}));
+                }
+            });
+
+            // pagination buttons
+            pagePrev.addEventListener('click', function(){
+                if(!lastPagination) return;
+                const cur = lastPagination.current_page || 1;
+                const prev = Math.max(1, cur - 1);
+                sendChat(`show page ${prev}`, {showUser:true});
+            });
+            pageNext.addEventListener('click', function(){
+                if(!lastPagination) return;
+                const cur = lastPagination.current_page || 1;
+                const next = Math.min(lastPagination.total_pages || cur, cur + 1);
+                sendChat(`show page ${next}`, {showUser:true});
+            });
+
+            // wire refresh and initial load
+            refreshBtn.addEventListener('click', fetchFiles);
+            fetchFiles();
+        })();
+    </script>
+</body>
+</html>
