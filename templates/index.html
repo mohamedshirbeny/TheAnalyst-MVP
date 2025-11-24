@@ -110,29 +110,24 @@
                 });
             }
 
-            function fetchSessionInfo(){
-                return fetch('/session_info')
+            function fetchSession(){
+                // Single API call combines files list and active file
+                return fetch('/api/v1/session')
                     .then(r => r.json())
-                    .catch(err => {
-                        console.error('session_info error', err);
-                        return {active_file: null};
-                    });
-            }
-
-            function fetchFiles(){
-                fetch('/files')
-                    .then(r => r.json())
-                    .then(async data => {
+                    .then(data => {
                         if(Array.isArray(data.files)){
                             renderFiles(data.files);
-                            // after rendering files, get session active file from server
-                            const si = await fetchSessionInfo();
-                            if(si && si.active_file){
-                                setActiveFileLabel(si.active_file);
+                            // Set active file label from response
+                            if(data.active_file){
+                                setActiveFileLabel(data.active_file);
                             }
                         }
+                        return data;
                     })
-                    .catch(err => console.error('files error', err));
+                    .catch(err => {
+                        console.error('session API error', err);
+                        return {files: [], active_file: null};
+                    });
             }
 
             function selectFile(filename){
@@ -250,8 +245,8 @@
             });
 
             // wire refresh and initial load
-            refreshBtn.addEventListener('click', fetchFiles);
-            fetchFiles();
+            refreshBtn.addEventListener('click', fetchSession);
+            fetchSession();
         })();
     </script>
 </body>

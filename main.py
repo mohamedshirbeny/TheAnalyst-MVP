@@ -42,13 +42,15 @@ def upload_file():
         return "File uploaded successfully"
 
 
-@app.route('/files', methods=['GET'])
-def list_files():
+@app.route('/api/v1/session', methods=['GET'])
+def api_session():
+    # Combined endpoint: return both files list and active file for this session
     allowed_exts = ('.csv', '.txt', '.xls', '.xlsx')
     files = [f for f in os.listdir(UPLOAD_FOLDER)
              if os.path.isfile(os.path.join(UPLOAD_FOLDER, f)) and f.lower().endswith(allowed_exts)]
     files.sort()
-    return jsonify({'files': files}), 200
+    active = session.get('active_file')
+    return jsonify({'files': files, 'active_file': active}), 200
 
 
 @app.route('/select_file', methods=['POST'])
@@ -89,11 +91,6 @@ def select_file():
     return jsonify({'selected': filename}), 200
 
 
-@app.route('/session_info', methods=['GET'])
-def session_info():
-    # Return the currently active filename for this session (if any)
-    active = session.get('active_file')
-    return jsonify({'active_file': active}), 200
 @app.route('/chat', methods=['POST'])
 def chat():
     # Accept JSON payload with a 'message' field
