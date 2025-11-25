@@ -55,8 +55,9 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ai_query_count = deferred(db.Column(db.Integer, default=0))  # Track AI queries for Pro tier (deferred to avoid old DB crash)
     
-    # Relationship to files
+    # Relationships
     files = db.relationship('File', backref='owner', lazy=True, cascade='all, delete-orphan')
+    dashboards = db.relationship('Dashboard', backref='owner', lazy=True, cascade='all, delete-orphan')
     
     def set_password(self, password):
         """Hash and set the password"""
@@ -79,6 +80,34 @@ class File(db.Model):
     
     def __repr__(self):
         return f'<File {self.filename}>'
+
+
+class Dashboard(db.Model):
+    """Dashboard model for user-created data dashboards"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    layout = db.Column(db.Text, default='{}')  # Store JSON configuration for layout
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship to charts
+    charts = db.relationship('Chart', backref='dashboard', lazy=True, cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<Dashboard {self.name}>'
+
+
+class Chart(db.Model):
+    """Chart model for individual charts within a dashboard"""
+    id = db.Column(db.Integer, primary_key=True)
+    chart_type = db.Column(db.String(50), nullable=False)  # e.g., 'histogram', 'line', 'scatter', 'bar'
+    config = db.Column(db.Text, default='{}')  # Store JSON configuration for chart settings
+    dashboard_id = db.Column(db.Integer, db.ForeignKey('dashboard.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def __repr__(self):
+        return f'<Chart {self.chart_type}>'
 
 
 @login_manager.user_loader
@@ -607,6 +636,75 @@ Please answer this question based on the data provided."""
                 'model': 'openai',
                 'error': True
             }), 200
+
+# ============================================================================
+# DASHBOARD API ENDPOINTS
+# ============================================================================
+
+@app.route('/api/v1/dashboards', methods=['POST'])
+@login_required
+def create_dashboard():
+    """Create a new dashboard for the current user"""
+    data = request.get_json(silent=True) or {}
+    name = data.get('name', '').strip()
+    
+    if not name:
+        return jsonify({'error': 'Dashboard name is required'}), 400
+    
+    try:
+        # Create new dashboard
+        dashboard = Dashboard(name=name, user_id=current_user.id)
+        db.session.add(dashboard)
+        db.session.commit()
+        
+        return jsonify({
+            'id': dashboard.id,
+            'name': dashboard.name,
+            'user_id': dashboard.user_id,
+            'created_at': dashboard.created_at.isoformat()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to create dashboard: {str(e)}'}), 500
+
+
+@app.route('/api/v1/dashboards/<int:dashboard_id>/charts', methods=['POST'])
+@login_required
+def add_chart_to_dashboard(dashboard_id):
+    """Add a chart to a dashboard"""
+    # Verify dashboard belongs to current user
+    dashboard = Dashboard.query.filter_by(id=dashboard_id, user_id=current_user.id).first()
+    if not dashboard:
+        return jsonify({'error': 'Dashboard not found or access denied'}), 404
+    
+    data = request.get_json(silent=True) or {}
+    chart_type = data.get('chart_type', '').strip()
+    config = data.get('config', {})
+    
+    if not chart_type:
+        return jsonify({'error': 'Chart type is required'}), 400
+    
+    try:
+        import json
+        # Create new chart
+        chart = Chart(
+            chart_type=chart_type,
+            config=json.dumps(config),
+            dashboard_id=dashboard_id
+        )
+        db.session.add(chart)
+        db.session.commit()
+        
+        return jsonify({
+            'id': chart.id,
+            'chart_type': chart.chart_type,
+            'config': config,
+            'dashboard_id': chart.dashboard_id,
+            'created_at': chart.created_at.isoformat()
+        }), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Failed to create chart: {str(e)}'}), 500
 
 if __name__ == '__main__':
     # Initialize the database
