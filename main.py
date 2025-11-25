@@ -44,6 +44,41 @@ if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
+# Helper to create OpenAI client in a proxy-safe way
+def create_openai_client():
+    """Create and return an OpenAI client.
+    If proxy environment variables are present, create an httpx.Client
+    and pass it via the `http_client` parameter (the OpenAI SDK does not
+    accept a `proxies=` kwarg on construction).
+    Returns an OpenAI instance or raises the underlying import error.
+    """
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        return None
+
+    try:
+        from openai import OpenAI
+    except Exception:
+        # Let the caller handle import errors
+        raise
+
+    # Check common env vars for proxy settings
+    proxy_url = os.environ.get('OPENAI_PROXY') or os.environ.get('HTTPS_PROXY') or os.environ.get('HTTP_PROXY')
+    if proxy_url:
+        try:
+            import httpx
+            # httpx.Client in some versions expects `proxy` (singular) rather than `proxies`
+            # so try both patterns safely.
+            try:
+                http_client = httpx.Client(proxy=proxy_url)
+            except TypeError:
+                http_client = httpx.Client(proxies=proxy_url)
+            return OpenAI(api_key=api_key, http_client=http_client)
+        except Exception:
+            # Fall back to plain client if httpx is not available or fails
+            return OpenAI(api_key=api_key)
+
+    return OpenAI(api_key=api_key)
 # ============================================================================
 # DATABASE MODELS
 # ============================================================================
@@ -589,9 +624,21 @@ def chat():
                 except Exception:
                     data_context = "Could not load data file for context."
             
-            # Call OpenAI API
-            from openai import OpenAI
-            client = OpenAI(api_key=api_key)
+            # Call OpenAI API via proxy-safe factory
+            try:
+                client = create_openai_client()
+            except Exception as e:
+                return jsonify({
+                    'answer': f'Error initializing AI client: {str(e)}',
+                    'model': 'openai',
+                    'error': True
+                }), 200
+
+            if not client:
+                return jsonify({
+                    'answer': 'AI feature not configured. Please set OPENAI_API_KEY environment variable.',
+                    'model': 'none'
+                }), 200
             
             system_prompt = """You are a data analyst assistant. Answer the user's question based ONLY on the provided data. 
 Be concise and direct in your analysis. If the data doesn't contain information to answer the question, say so clearly."""
