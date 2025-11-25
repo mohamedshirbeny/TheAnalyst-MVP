@@ -508,11 +508,15 @@ def chat():
             # CRITICAL SECURITY FIX: Load only current user's files for AI context
             user_files = File.query.filter_by(user_id=current_user.id).all()
             
-            # Pro tier usage limit check
-            if current_user.ai_query_count >= 10:
-                return jsonify({
-                    'error': 'You have reached your monthly limit of 10 AI questions. Upgrade to Pro for unlimited access.'
-                }), 200
+            # Pro tier usage limit check - wrapped for backward compatibility
+            try:
+                if current_user.ai_query_count >= 10:
+                    return jsonify({
+                        'error': 'You have reached your monthly limit of 10 AI questions. Upgrade to Pro for unlimited access.'
+                    }), 200
+            except Exception:
+                # Database column doesn't exist on old databases, skip usage limit
+                pass
             
             data_context = "No data file loaded."
             if user_files:
@@ -581,9 +585,13 @@ Please answer this question based on the data provided."""
             
             ai_answer = response.choices[0].message.content
             
-            # Increment AI query count and save
-            current_user.ai_query_count += 1
-            db.session.commit()
+            # Increment AI query count and save - wrapped for backward compatibility
+            try:
+                current_user.ai_query_count += 1
+                db.session.commit()
+            except Exception:
+                # Database column doesn't exist on old databases, skip counter increment
+                pass
             
             return jsonify({
                 'answer': ai_answer,
