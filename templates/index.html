@@ -69,19 +69,57 @@
             </aside>
 
             <main class="col-12 col-md-8 col-lg-9">
-                <div class="card h-100">
-                    <div class="card-body d-flex flex-column">
-                        <div id="messages" class="chat-area mb-3"></div>
+                <ul class="nav nav-tabs mb-3" id="content-tabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="chat-tab" data-bs-toggle="tab" data-bs-target="#chat-panel" type="button" role="tab"><i class="bi bi-chat-dots me-1"></i> Chat</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="data-tab" data-bs-toggle="tab" data-bs-target="#data-panel" type="button" role="tab"><i class="bi bi-table me-1"></i> Data</button>
+                    </li>
+                </ul>
 
-                        <form id="chat-form" class="d-flex gap-2 align-items-start">
-                            <input id="chat-input" class="form-control" type="text" placeholder="Ask me about your data..." autocomplete="off">
-                            <button id="chat-send" class="btn btn-success" type="submit"><i class="bi bi-send"></i></button>
-                        </form>
+                <div class="tab-content">
+                    <!-- Chat Tab -->
+                    <div class="tab-pane fade show active" id="chat-panel" role="tabpanel">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div id="messages" class="chat-area mb-3"></div>
 
-                        <div id="pagination-controls" class="d-flex justify-content-center align-items-center gap-3 mt-3" style="display:none">
-                            <button id="page-prev" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i> Prev</button>
-                            <span id="page-info">Page 1 of 1</span>
-                            <button id="page-next" class="btn btn-outline-secondary btn-sm">Next <i class="bi bi-chevron-right"></i></button>
+                                <form id="chat-form" class="d-flex gap-2 align-items-start">
+                                    <input id="chat-input" class="form-control" type="text" placeholder="Ask me about your data..." autocomplete="off">
+                                    <button id="chat-send" class="btn btn-success" type="submit"><i class="bi bi-send"></i></button>
+                                </form>
+
+                                <div id="pagination-controls" class="d-flex justify-content-center align-items-center gap-3 mt-3" style="display:none">
+                                    <button id="page-prev" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i> Prev</button>
+                                    <span id="page-info">Page 1 of 1</span>
+                                    <button id="page-next" class="btn btn-outline-secondary btn-sm">Next <i class="bi bi-chevron-right"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Tab -->
+                    <div class="tab-pane fade" id="data-panel" role="tabpanel">
+                        <div class="card h-100">
+                            <div class="card-body d-flex flex-column">
+                                <div id="data-table-wrapper" class="table-responsive flex-grow-1 mb-3" style="display:none; max-height: 500px; overflow-y: auto;">
+                                    <table class="table table-sm table-hover mb-0" id="data-table">
+                                        <thead></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                                <div id="data-empty-state" class="text-center text-muted py-5">
+                                    <p><i class="bi bi-inbox" style="font-size:3rem;"></i></p>
+                                    <p>Select a file to view its data</p>
+                                </div>
+
+                                <div id="data-pagination-controls" class="d-flex justify-content-center align-items-center gap-3 mt-3" style="display:none">
+                                    <button id="data-page-prev" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i> Prev</button>
+                                    <span id="data-page-info">Page 1 of 1</span>
+                                    <button id="data-page-next" class="btn btn-outline-secondary btn-sm">Next <i class="bi bi-chevron-right"></i></button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -127,8 +165,17 @@ initTheme();
     const pagePrev = document.getElementById('page-prev');
     const pageNext = document.getElementById('page-next');
     const pageInfo = document.getElementById('page-info');
+    const dataTableWrapper = document.getElementById('data-table-wrapper');
+    const dataTable = document.getElementById('data-table');
+    const dataEmptyState = document.getElementById('data-empty-state');
+    const dataPaginationControls = document.getElementById('data-pagination-controls');
+    const dataPagePrev = document.getElementById('data-page-prev');
+    const dataPageNext = document.getElementById('data-page-next');
+    const dataPageInfo = document.getElementById('data-page-info');
     let lastPagination = null;
     let activeFilename = null;
+    let currentDataPage = 1;
+    let totalDataPages = 1;
 
     function appendMessage(text, cls, opts){
         const wrapper = document.createElement('div');
@@ -172,7 +219,73 @@ initTheme();
 
     function selectFile(filename){
         fetch('/select_file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename})}).then(r=>r.json()).then(data=>{
-            if(data && data.selected){ activeFilename = data.selected; appendMessage(`Selected file: ${data.selected}`,'bot'); }
+            if(data && data.selected){ 
+                activeFilename = data.selected; 
+                appendMessage(`Selected file: ${data.selected}`,'bot'); 
+                // Load first page of data
+                loadDataPage(1);
+            }
+        });
+    }
+
+    function loadDataPage(pageNum){
+        fetch(`/view_data/${pageNum}`).then(r=>r.json()).then(data=>{
+            if(data && data.error){
+                dataEmptyState.style.display='block';
+                dataTableWrapper.style.display='none';
+                dataPaginationControls.style.display='none';
+                return;
+            }
+            if(data && data.data){
+                renderDataTable(data);
+                currentDataPage = data.current_page;
+                totalDataPages = data.total_pages;
+                dataPageInfo.textContent = `Page ${data.current_page} of ${data.total_pages} | ${data.total_rows} rows`;
+                dataPagePrev.disabled = data.current_page <= 1;
+                dataPageNext.disabled = data.current_page >= data.total_pages;
+                dataTableWrapper.style.display='block';
+                dataEmptyState.style.display='none';
+                dataPaginationControls.style.display='flex';
+            }
+        }).catch(err=>{
+            console.error('Error loading data:', err);
+            dataEmptyState.style.display='block';
+            dataTableWrapper.style.display='none';
+            dataPaginationControls.style.display='none';
+        });
+    }
+
+    function renderDataTable(data){
+        const thead = dataTable.querySelector('thead');
+        const tbody = dataTable.querySelector('tbody');
+        thead.innerHTML='';
+        tbody.innerHTML='';
+
+        if(!data.columns || !data.data) return;
+
+        // Render header
+        const headerRow = document.createElement('tr');
+        data.columns.forEach(col=>{
+            const th = document.createElement('th');
+            th.textContent = col;
+            th.style.whiteSpace = 'nowrap';
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+
+        // Render rows
+        data.data.forEach(row=>{
+            const tr = document.createElement('tr');
+            data.columns.forEach(col=>{
+                const td = document.createElement('td');
+                const val = row[col];
+                td.textContent = val !== null && val !== undefined ? String(val).substring(0, 100) : '(empty)';
+                td.style.maxWidth = '200px';
+                td.style.overflow = 'hidden';
+                td.style.textOverflow = 'ellipsis';
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
         });
     }
 
@@ -197,7 +310,8 @@ initTheme();
     input && input.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); form && form.dispatchEvent(new Event('submit',{cancelable:true,bubbles:true})); } });
     pagePrev && pagePrev.addEventListener('click', function(){ if(!lastPagination) return; const cur = lastPagination.current_page||1; const prev = Math.max(1, cur-1); sendChat(`show page ${prev}`, {showUser:true}); });
     pageNext && pageNext.addEventListener('click', function(){ if(!lastPagination) return; const cur = lastPagination.current_page||1; const next = Math.min(lastPagination.total_pages||cur, cur+1); sendChat(`show page ${next}`, {showUser:true}); });
-
+    dataPagePrev && dataPagePrev.addEventListener('click', function(){ if(currentDataPage > 1) loadDataPage(currentDataPage - 1); });
+    dataPageNext && dataPageNext.addEventListener('click', function(){ if(currentDataPage < totalDataPages) loadDataPage(currentDataPage + 1); });
     refreshBtn && refreshBtn.addEventListener('click', fetchSession);
     fetchSession();
 })();
