@@ -16,6 +16,20 @@
         </div>
     </div>
 
+    <!-- Success Message Banner -->
+    <div id="success-banner" style="display: none; padding: 15px 20px; background-color: #4caf50; color: white; text-align: center; font-weight: 600; position: fixed; top: 0; left: 0; right: 0; z-index: 1000; animation: fadeInOut 5s ease-in-out;">
+        File uploaded successfully!
+    </div>
+
+    <style>
+        @keyframes fadeInOut {
+            0% { opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+    </style>
+
     <div style="padding: 20px;">
         <h2>Upload a File</h2>
         <form class="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
@@ -106,12 +120,32 @@
                     const nameSpan = document.createElement('span');
                     nameSpan.textContent = fn;
                     const right = document.createElement('span');
-                    const btn = document.createElement('button');
-                    btn.textContent = 'Select';
-                    btn.addEventListener('click', function(){
+                    right.style.display = 'flex';
+                    right.style.gap = '6px';
+                    
+                    const selectBtn = document.createElement('button');
+                    selectBtn.textContent = 'Select';
+                    selectBtn.addEventListener('click', function(){
                         selectFile(fn);
                     });
-                    right.appendChild(btn);
+                    right.appendChild(selectBtn);
+                    
+                    // Add Auto-Analyze button
+                    const analyzeBtn = document.createElement('button');
+                    analyzeBtn.textContent = 'Auto-Analyze';
+                    analyzeBtn.style.backgroundColor = '#9c27b0';
+                    analyzeBtn.style.color = 'white';
+                    analyzeBtn.style.border = 'none';
+                    analyzeBtn.style.padding = '6px 12px';
+                    analyzeBtn.style.borderRadius = '4px';
+                    analyzeBtn.style.cursor = 'pointer';
+                    analyzeBtn.style.fontSize = '12px';
+                    analyzeBtn.style.fontWeight = '600';
+                    analyzeBtn.addEventListener('click', function(){
+                        autoAnalyze(fn);
+                    });
+                    right.appendChild(analyzeBtn);
+                    
                     li.appendChild(nameSpan);
                     li.appendChild(right);
                     if(activeFilename && activeFilename === fn){
@@ -169,6 +203,39 @@
                 });
             }
 
+            function autoAnalyze(filename){
+                // Call the auto_analyze endpoint to get head, describe, and histogram
+                fetch('/api/v1/auto_analyze', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({filename})
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if(data && data.head){
+                        // Display head analysis
+                        appendMessage(`Analysis of ${filename} - Head:`, 'bot');
+                        appendMessage(data.head, 'bot', {html: true});
+                        
+                        // Display describe analysis
+                        appendMessage('Statistical Summary:', 'bot');
+                        appendMessage(data.describe, 'bot', {html: true});
+                        
+                        // Display histogram if available
+                        if(data.histogram){
+                            appendMessage('Distribution Chart:', 'bot');
+                            appendMessage(data.histogram, 'bot', {html: true});
+                        }
+                    } else if(data && data.error){
+                        appendMessage(`Error: ${data.error}`, 'bot');
+                    }
+                })
+                .catch(err => {
+                    appendMessage('Auto-analyze failed', 'bot');
+                    console.error('auto-analyze error', err);
+                });
+            }
+
             // Intercept upload form to upload via fetch and refresh files + auto-select
             const uploadForm = document.querySelector('.upload-form');
             uploadForm.addEventListener('submit', function(e){
@@ -181,11 +248,17 @@
                 fetch('/upload', { method: 'POST', body: fd })
                     .then(r => r.text())
                     .then(text => {
-                        appendMessage(`Upload: ${text}`, 'bot');
-                        // refresh file list and auto-select the newly uploaded file
-                        fetchFiles();
-                        // small timeout to allow list render
+                        // Show success banner
+                        const banner = document.getElementById('success-banner');
+                        banner.style.display = 'block';
+                        setTimeout(() => { banner.style.display = 'none'; }, 5000);
+                        
+                        // Refresh file list and auto-select
+                        fetchSession();
                         setTimeout(() => selectFile(file.name), 300);
+                        
+                        // Clear file input
+                        fileInput.value = '';
                     })
                     .catch(err => {
                         appendMessage('Upload failed', 'bot');

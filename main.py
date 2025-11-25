@@ -52,6 +52,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ai_query_count = db.Column(db.Integer, default=0)  # Track AI queries for Pro tier
     
     # Relationship to files
     files = db.relationship('File', backref='owner', lazy=True, cascade='all, delete-orphan')
@@ -245,6 +246,83 @@ def select_file():
     return jsonify({'selected': filename}), 200
 
 
+@app.route('/api/v1/auto_analyze', methods=['POST'])
+@login_required
+def auto_analyze():
+    """Auto-analyze a user's file: head, describe, and histogram of first numeric column"""
+    data = request.get_json(silent=True) or {}
+    filename = data.get('filename', '').strip()
+    
+    if not filename:
+        return jsonify({'error': 'filename is required'}), 400
+    
+    # CRITICAL SECURITY FIX: Verify file belongs to current user
+    user_file = File.query.filter_by(filename=filename, user_id=current_user.id).first()
+    if not user_file:
+        return jsonify({'error': 'File not found or access denied'}), 404
+    
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File not found on disk'}), 404
+    
+    try:
+        # Read dataframe
+        import io
+        if filepath.lower().endswith(('.csv', '.txt')):
+            with open(filepath, 'rb') as fh:
+                raw = fh.read()
+            try:
+                text = raw.decode('utf-8')
+            except Exception:
+                text = raw.decode('utf-8', errors='replace')
+            df = pd.read_csv(io.StringIO(text))
+        else:
+            try:
+                df = pd.read_excel(filepath)
+            except Exception:
+                with open(filepath, 'rb') as fh:
+                    raw = fh.read()
+                text = raw.decode('utf-8', errors='replace')
+                import io as _io
+                df = pd.read_csv(_io.StringIO(text))
+        
+        # Analysis 1: Head
+        head_html = df.head().to_html(classes='data-table', index=False, border=0)
+        
+        # Analysis 2: Describe
+        describe_html = df.describe(include='all').to_html(classes='data-table', border=0)
+        
+        # Analysis 3: Histogram of first numeric column
+        numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+        histogram_html = None
+        
+        if numeric_cols:
+            try:
+                import plotly.graph_objects as go
+                col_name = numeric_cols[0]
+                fig = go.Figure(data=[go.Histogram(x=df[col_name], nbinsx=20)])
+                fig.update_layout(
+                    title=f'Histogram of {col_name}',
+                    xaxis_title=col_name,
+                    yaxis_title='Frequency',
+                    height=400,
+                    hovermode='x unified'
+                )
+                histogram_html = fig.to_html(include_plotlyjs='cdn', div_id='plot_histogram')
+            except Exception:
+                histogram_html = "<p>Could not generate histogram.</p>"
+        
+        return jsonify({
+            'head': head_html,
+            'describe': describe_html,
+            'histogram': histogram_html,
+            'filename': filename
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'error': f'Error analyzing file: {str(e)}'}), 500
+
+
 @app.route('/chat', methods=['POST'])
 @login_required
 def chat():
@@ -430,6 +508,12 @@ def chat():
             # CRITICAL SECURITY FIX: Load only current user's files for AI context
             user_files = File.query.filter_by(user_id=current_user.id).all()
             
+            # Pro tier usage limit check
+            if current_user.ai_query_count >= 10:
+                return jsonify({
+                    'error': 'You have reached your monthly limit of 10 AI questions. Upgrade to Pro for unlimited access.'
+                }), 200
+            
             data_context = "No data file loaded."
             if user_files:
                 active = session.get('active_file')
@@ -496,6 +580,10 @@ Please answer this question based on the data provided."""
             )
             
             ai_answer = response.choices[0].message.content
+            
+            # Increment AI query count and save
+            current_user.ai_query_count += 1
+            db.session.commit()
             
             return jsonify({
                 'answer': ai_answer,
