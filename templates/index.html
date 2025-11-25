@@ -1,647 +1,206 @@
 <!DOCTYPE html>
 <html lang="en" data-bs-theme="light">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>The Analyst - Data Analysis AI</title>
-    
     <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    
     <style>
-        :root {
-            --sidebar-width: 350px;
-            --header-height: 60px;
-        }
-
-        html, body {
-            height: 100%;
-        }
-
-        body {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .navbar-custom {
-            background-color: var(--bs-body-bg);
-            border-bottom: 1px solid var(--bs-border-color);
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-        }
-
-        .main-container {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .sidebar {
-            width: var(--sidebar-width);
-            background-color: var(--bs-body-bg);
-            border-right: 1px solid var(--bs-border-color);
-            overflow-y: auto;
-            padding: 1.5rem;
-        }
-
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            padding: 1.5rem;
-        }
-
-        .chat-area {
-            flex: 1;
-            overflow-y: auto;
-            margin-bottom: 1rem;
-            background-color: var(--bs-body-bg);
-            border-radius: 0.5rem;
-            padding: 1rem;
-            border: 1px solid var(--bs-border-color);
-        }
-
-        .msg-user {
-            display: flex;
-            justify-content: flex-end;
-            margin-bottom: 0.75rem;
-        }
-
-        .msg-user-content {
-            background-color: #0d6efd;
-            color: white;
-            padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
-            max-width: 70%;
-            word-wrap: break-word;
-        }
-
-        .msg-bot {
-            display: flex;
-            justify-content: flex-start;
-            margin-bottom: 0.75rem;
-        }
-
-        .msg-bot-content {
-            background-color: var(--bs-gray-200);
-            color: var(--bs-body-color);
-            padding: 0.75rem 1rem;
-            border-radius: 0.5rem;
-            max-width: 70%;
-            word-wrap: break-word;
-        }
-
-        [data-bs-theme="dark"] .msg-bot-content {
-            background-color: var(--bs-gray-700);
-        }
-
-        .file-item {
-            padding: 0.75rem;
-            margin-bottom: 0.5rem;
-            background-color: var(--bs-gray-100);
-            border-radius: 0.375rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-left: 3px solid transparent;
-            transition: all 0.2s ease;
-        }
-
-        [data-bs-theme="dark"] .file-item {
-            background-color: var(--bs-gray-800);
-        }
-
-        .file-item:hover {
-            background-color: var(--bs-gray-200);
-        }
-
-        [data-bs-theme="dark"] .file-item:hover {
-            background-color: var(--bs-gray-700);
-        }
-
-        .file-item.active {
-            border-left-color: #0d6efd;
-            background-color: #e7f1ff;
-        }
-
-        [data-bs-theme="dark"] .file-item.active {
-            background-color: rgba(13, 110, 253, 0.15);
-        }
-
-        .file-name {
-            flex: 1;
-            font-size: 0.95rem;
-            font-weight: 500;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .file-actions {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .file-actions .btn {
-            padding: 0.375rem 0.75rem;
-            font-size: 0.85rem;
-        }
-
-        .upload-section {
-            margin-bottom: 1.5rem;
-        }
-
-        .upload-section h5 {
-            margin-bottom: 1rem;
-            font-weight: 600;
-        }
-
-        .chat-input-area {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .chat-input-area input {
-            flex: 1;
-        }
-
-        #messages {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .pagination-controls {
-            display: flex;
-            justify-content: center;
-            gap: 0.75rem;
-            margin-top: 1rem;
-            padding: 1rem;
-            border-top: 1px solid var(--bs-border-color);
-        }
-
-        .success-banner {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 1050;
-            animation: slideDown 0.3s ease-in-out, slideUp 0.3s ease-in-out 4.7s;
-        }
-
-        @keyframes slideDown {
-            from {
-                transform: translateY(-100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes slideUp {
-            from {
-                transform: translateY(0);
-                opacity: 1;
-            }
-            to {
-                transform: translateY(-100%);
-                opacity: 0;
-            }
-        }
-
-        .theme-toggle {
-            cursor: pointer;
-            font-size: 1.25rem;
-            transition: transform 0.3s ease;
-        }
-
-        .theme-toggle:hover {
-            transform: rotate(20deg);
-        }
-
-        @media (max-width: 768px) {
-            :root {
-                --sidebar-width: 100%;
-            }
-
-            .main-container {
-                flex-direction: column;
-            }
-
-            .sidebar {
-                width: 100%;
-                max-height: 50%;
-                border-right: none;
-                border-bottom: 1px solid var(--bs-border-color);
-            }
-
-            .msg-user-content,
-            .msg-bot-content {
-                max-width: 100%;
-            }
-        }
+        /* Minimal custom styles to keep layout tidy while relying on Bootstrap */
+        body, html { height: 100%; }
+        .app-shell { min-height: 100vh; display:flex; flex-direction:column; }
+        .content { flex:1 1 auto; }
+        .sidebar { max-height: calc(100vh - 72px); overflow:auto; }
+        .chat-area { height: calc(60vh); overflow:auto; }
+        @media (max-width: 767px){ .chat-area { height: 40vh; } }
     </style>
 </head>
 <body>
-    <!-- Success Banner -->
-    <div id="success-banner" class="success-banner alert alert-success alert-dismissible fade" role="alert" style="display: none; margin-bottom: 0;">
-        <strong>Success!</strong> File uploaded successfully.
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
-
-    <!-- Navigation Header -->
-    <nav class="navbar navbar-expand-lg navbar-custom">
+<div class="app-shell">
+    <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold" href="#">
-                <i class="bi bi-graph-up"></i> The Analyst
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <i class="bi bi-graph-up me-2"></i>
+                <span class="fw-bold">The Analyst</span>
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <div class="navbar-nav ms-auto">
-                    <span class="nav-text me-3" id="username"></span>
-                    <button class="btn btn-sm theme-toggle me-2" id="theme-toggle" title="Toggle dark mode">
-                        <i class="bi bi-moon-stars"></i>
-                    </button>
-                    <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">
-                        <i class="bi bi-box-arrow-right"></i> Logout
-                    </a>
-                </div>
+
+            <div class="collapse navbar-collapse" id="navMain">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item me-3"><span id="username" class="nav-link"></span></li>
+                    <li class="nav-item me-2">
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" id="theme-switch">
+                            <label class="form-check-label" for="theme-switch">Dark</label>
+                        </div>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}"><i class="bi bi-box-arrow-right"></i> Logout</a>
+                    </li>
+                </ul>
             </div>
         </div>
     </nav>
 
-    <!-- Main Container -->
-    <div class="main-container">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <!-- Upload Section -->
-            <div class="upload-section">
-                <h5>Upload File</h5>
-                <form class="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
-                    <div class="mb-2">
-                        <input class="form-control form-control-sm" type="file" name="file" required>
+    <div class="content container-fluid py-3">
+        <div class="row g-3">
+            <aside class="col-12 col-md-4 col-lg-3">
+                <div class="card sidebar p-2">
+                    <div class="card-body">
+                        <h6 class="card-title">Upload</h6>
+                        <form class="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
+                            <div class="mb-2">
+                                <input class="form-control form-control-sm" type="file" name="file" required>
+                            </div>
+                            <button class="btn btn-primary btn-sm w-100" type="submit"><i class="bi bi-cloud-upload me-1"></i> Upload</button>
+                        </form>
+                        <hr>
+                        <div class="d-flex mb-2">
+                            <button id="refresh-files" class="btn btn-outline-secondary btn-sm me-2 flex-grow-1"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+                        </div>
+                        <div id="active-file-badge" class="mb-2"><span id="active-file" class="badge bg-info" style="display:none"></span></div>
+                        <div id="files-list" class="list-group list-group-flush overflow-auto"></div>
                     </div>
-                    <button class="btn btn-primary btn-sm w-100" type="submit">
-                        <i class="bi bi-cloud-upload"></i> Upload
-                    </button>
-                </form>
-            </div>
-
-            <hr>
-
-            <!-- File Management Section -->
-            <div class="upload-section">
-                <h5>Your Files</h5>
-                <button class="btn btn-outline-secondary btn-sm mb-2 w-100" id="refresh-files">
-                    <i class="bi bi-arrow-clockwise"></i> Refresh
-                </button>
-                <div id="active-file-badge">
-                    <span class="badge bg-info mb-2" id="active-file" style="display: none;"></span>
                 </div>
-                <div class="list-group list-group-sm" id="files-list">
-                    <!-- Files will be rendered here -->
+            </aside>
+
+            <main class="col-12 col-md-8 col-lg-9">
+                <div class="card h-100">
+                    <div class="card-body d-flex flex-column">
+                        <div id="messages" class="chat-area mb-3"></div>
+
+                        <form id="chat-form" class="d-flex gap-2 align-items-start">
+                            <input id="chat-input" class="form-control" type="text" placeholder="Ask me about your data..." autocomplete="off">
+                            <button id="chat-send" class="btn btn-success" type="submit"><i class="bi bi-send"></i></button>
+                        </form>
+
+                        <div id="pagination-controls" class="d-flex justify-content-center align-items-center gap-3 mt-3" style="display:none">
+                            <button id="page-prev" class="btn btn-outline-secondary btn-sm"><i class="bi bi-chevron-left"></i> Prev</button>
+                            <span id="page-info">Page 1 of 1</span>
+                            <button id="page-next" class="btn btn-outline-secondary btn-sm">Next <i class="bi bi-chevron-right"></i></button>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Main Content Area -->
-        <div class="main-content">
-            <!-- Chat Area -->
-            <div class="chat-area" id="messages">
-                <!-- Messages will appear here -->
-            </div>
-
-            <!-- Chat Input Area -->
-            <div class="chat-input-area">
-                <form id="chat-form" class="w-100 d-flex gap-2">
-                    <input 
-                        class="form-control" 
-                        id="chat-input" 
-                        type="text" 
-                        placeholder="Ask me about your data..." 
-                        autocomplete="off"
-                    >
-                    <button class="btn btn-success" id="chat-send" type="submit">
-                        <i class="bi bi-send"></i>
-                    </button>
-                </form>
-            </div>
-
-            <!-- Pagination Controls -->
-            <div class="pagination-controls" id="pagination-controls" style="display: none;">
-                <button class="btn btn-outline-secondary btn-sm" id="page-prev">
-                    <i class="bi bi-chevron-left"></i> Previous
-                </button>
-                <span class="align-self-center" id="page-info">Page 1 of 1</span>
-                <button class="btn btn-outline-secondary btn-sm" id="page-next">
-                    Next <i class="bi bi-chevron-right"></i>
-                </button>
-            </div>
+            </main>
         </div>
     </div>
+</div>
 
-    <!-- Bootstrap 5 JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Success Banner -->
+<div id="success-banner" class="position-fixed top-0 start-50 translate-middle-x mt-3" style="z-index:1050; display:none;">
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <strong>Success!</strong> File uploaded successfully.
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+</div>
 
-    <script>
-        (function(){
-            const form = document.getElementById('chat-form');
-            const input = document.getElementById('chat-input');
-            const messages = document.getElementById('messages');
-            const filesList = document.getElementById('files-list');
-            const refreshBtn = document.getElementById('refresh-files');
-            const activeFileSpan = document.getElementById('active-file');
-            const paginationControls = document.getElementById('pagination-controls');
-            const pagePrev = document.getElementById('page-prev');
-            const pageNext = document.getElementById('page-next');
-            const pageInfo = document.getElementById('page-info');
-            const themeToggle = document.getElementById('theme-toggle');
-            const htmlElement = document.documentElement;
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// Theme toggle using data-bs-theme and localStorage
+const htmlEl = document.documentElement;
+const themeSwitch = document.getElementById('theme-switch');
+function initTheme(){
+    const saved = localStorage.getItem('theme') || 'light';
+    htmlEl.setAttribute('data-bs-theme', saved);
+    themeSwitch.checked = saved === 'dark';
+}
+themeSwitch && themeSwitch.addEventListener('change', ()=>{
+    const t = themeSwitch.checked ? 'dark' : 'light';
+    htmlEl.setAttribute('data-bs-theme', t);
+    localStorage.setItem('theme', t);
+});
+initTheme();
 
-            let lastPagination = null;
-            let activeFilename = null;
+// Preserve original app JS behavior (fetchSession, chat, uploads)
+(function(){
+    const form = document.getElementById('chat-form');
+    const input = document.getElementById('chat-input');
+    const messages = document.getElementById('messages');
+    const filesList = document.getElementById('files-list');
+    const refreshBtn = document.getElementById('refresh-files');
+    const paginationControls = document.getElementById('pagination-controls');
+    const pagePrev = document.getElementById('page-prev');
+    const pageNext = document.getElementById('page-next');
+    const pageInfo = document.getElementById('page-info');
+    let lastPagination = null;
+    let activeFilename = null;
 
-            // ===== THEME TOGGLE =====
-            function initTheme(){
-                const savedTheme = localStorage.getItem('theme') || 'light';
-                htmlElement.setAttribute('data-bs-theme', savedTheme);
-                updateThemeIcon(savedTheme);
+    function appendMessage(text, cls, opts){
+        const wrapper = document.createElement('div');
+        wrapper.className = cls === 'user' ? 'd-flex justify-content-end mb-2' : 'd-flex justify-content-start mb-2';
+        const bubble = document.createElement('div');
+        bubble.className = cls === 'user' ? 'bg-primary text-white p-2 rounded' : 'bg-light p-2 rounded';
+        bubble.style.maxWidth = '80%';
+        if(opts && opts.html && cls === 'bot') bubble.innerHTML = text; else bubble.textContent = text;
+        wrapper.appendChild(bubble);
+        messages.appendChild(wrapper);
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function renderFiles(list){
+        filesList.innerHTML='';
+        list.forEach(fn=>{
+            const a = document.createElement('div');
+            a.className = 'list-group-item d-flex justify-content-between align-items-center';
+            a.setAttribute('data-fn', fn);
+            const span = document.createElement('div'); span.className='text-truncate'; span.textContent=fn;
+            const btns = document.createElement('div');
+            const sel = document.createElement('button'); sel.className='btn btn-sm btn-primary me-1'; sel.textContent='Select'; sel.addEventListener('click', ()=>selectFile(fn));
+            const an = document.createElement('button'); an.className='btn btn-sm btn-warning'; an.textContent='Analyze'; an.addEventListener('click', ()=>autoAnalyze(fn));
+            btns.appendChild(sel); btns.appendChild(an);
+            a.appendChild(span); a.appendChild(btns);
+            if(activeFilename && activeFilename===fn) a.classList.add('active');
+            filesList.appendChild(a);
+        });
+    }
+
+    function fetchSession(){
+        return fetch('/api/v1/session').then(r=>r.json()).then(data=>{
+            if(data.username) document.getElementById('username').textContent = data.username;
+            if(Array.isArray(data.files)){
+                renderFiles(data.files);
+                if(data.active_file){ document.getElementById('active-file').textContent = `Active: ${data.active_file}`; document.getElementById('active-file').style.display='inline-block'; }
             }
+            return data;
+        }).catch(()=>({files:[], active_file:null}));
+    }
 
-            function updateThemeIcon(theme){
-                if(theme === 'dark'){
-                    themeToggle.innerHTML = '<i class="bi bi-sun"></i>';
-                } else {
-                    themeToggle.innerHTML = '<i class="bi bi-moon-stars"></i>';
-                }
-            }
+    function selectFile(filename){
+        fetch('/select_file',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename})}).then(r=>r.json()).then(data=>{
+            if(data && data.selected){ activeFilename = data.selected; appendMessage(`Selected file: ${data.selected}`,'bot'); }
+        });
+    }
 
-            themeToggle.addEventListener('click', function(){
-                const currentTheme = htmlElement.getAttribute('data-bs-theme');
-                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                htmlElement.setAttribute('data-bs-theme', newTheme);
-                localStorage.setItem('theme', newTheme);
-                updateThemeIcon(newTheme);
-            });
+    function autoAnalyze(filename){
+        fetch('/api/v1/auto_analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename})}).then(r=>r.json()).then(data=>{
+            if(data && data.head){ appendMessage(`📊 Analysis of ${filename}`,'bot'); appendMessage(data.head,'bot',{html:true}); appendMessage('📈 Statistical Summary','bot'); appendMessage(data.describe,'bot',{html:true}); if(data.histogram){ appendMessage('📉 Distribution Chart','bot'); appendMessage(data.histogram,'bot',{html:true}); } }
+            else if(data && data.error) appendMessage(`Error: ${data.error}`,'bot');
+        }).catch(()=>appendMessage('Auto-analyze failed','bot'));
+    }
 
-            initTheme();
+    const uploadForm = document.querySelector('.upload-form');
+    uploadForm && uploadForm.addEventListener('submit', function(e){
+        e.preventDefault(); const fileInput = uploadForm.querySelector('input[type="file"]'); if(!fileInput||!fileInput.files||!fileInput.files.length) return; const file=fileInput.files[0]; const fd=new FormData(); fd.append('file', file);
+        fetch('/upload',{method:'POST',body:fd}).then(r=>r.text()).then(()=>{ document.getElementById('success-banner').style.display='block'; setTimeout(()=>{document.getElementById('success-banner').style.display='none';},5000); fetchSession(); setTimeout(()=>selectFile(file.name),300); fileInput.value=''; }).catch(()=>appendMessage('Upload failed','bot'));
+    });
 
-            // ===== MESSAGE HANDLING =====
-            function appendMessage(text, cls, opts){
-                const msgDiv = document.createElement('div');
-                msgDiv.className = cls === 'user' ? 'msg-user' : 'msg-bot';
-                
-                const contentDiv = document.createElement('div');
-                contentDiv.className = cls === 'user' ? 'msg-user-content' : 'msg-bot-content';
-                
-                if(opts && opts.html && cls === 'bot'){
-                    contentDiv.innerHTML = text;
-                } else {
-                    contentDiv.textContent = text;
-                }
-                
-                msgDiv.appendChild(contentDiv);
-                messages.appendChild(msgDiv);
-                messages.scrollTop = messages.scrollHeight;
-            }
+    form && form.addEventListener('submit', function(e){ e.preventDefault(); const v = input.value.trim(); if(!v) return; appendMessage(v,'user'); input.value=''; input.focus(); sendChat(v,{showUser:false}); });
 
-            function setActiveFileLabel(name){
-                activeFilename = name || null;
-                const badge = document.getElementById('active-file');
-                if(name){
-                    badge.textContent = `Active: ${name}`;
-                    badge.style.display = 'inline-block';
-                } else {
-                    badge.style.display = 'none';
-                }
-                // Re-render files to update highlight
-                const items = Array.from(filesList.querySelectorAll('[data-fn]')).map(el => el.getAttribute('data-fn'));
-                if(items && items.length){
-                    renderFiles(items);
-                }
-            }
+    function sendChat(message, opts){ opts = opts||{}; if(opts.showUser!==false) appendMessage(message,'user'); return fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})}).then(r=>r.json()).then(data=>{ if(data && data.answer) appendMessage(data.answer,'bot',{html:true}); else if(data && data.response) appendMessage(data.response,'bot',{html:true}); else if(data && data.error) appendMessage(`⚠️ ${data.error}`,'bot'); if(data && data.pagination){ lastPagination = data.pagination; pageInfo.textContent = `Page ${data.pagination.current_page} of ${data.pagination.total_pages}`; paginationControls.style.display='flex'; pagePrev.disabled = data.pagination.current_page <= 1; pageNext.disabled = data.pagination.current_page >= data.pagination.total_pages; } else { lastPagination=null; paginationControls.style.display='none'; } return data; }).catch(()=>appendMessage('Error: could not reach server','bot'));
+    }
 
-            function renderFiles(list){
-                filesList.innerHTML = '';
-                list.forEach(fn => {
-                    const item = document.createElement('div');
-                    item.className = 'file-item';
-                    item.setAttribute('data-fn', fn);
-                    
-                    const nameSpan = document.createElement('span');
-                    nameSpan.className = 'file-name';
-                    nameSpan.textContent = fn;
-                    nameSpan.title = fn;
-                    
-                    const actionsDiv = document.createElement('div');
-                    actionsDiv.className = 'file-actions';
-                    
-                    const selectBtn = document.createElement('button');
-                    selectBtn.className = 'btn btn-primary btn-sm';
-                    selectBtn.textContent = 'Select';
-                    selectBtn.addEventListener('click', () => selectFile(fn));
-                    
-                    const analyzeBtn = document.createElement('button');
-                    analyzeBtn.className = 'btn btn-warning btn-sm';
-                    analyzeBtn.textContent = 'Analyze';
-                    analyzeBtn.addEventListener('click', () => autoAnalyze(fn));
-                    
-                    actionsDiv.appendChild(selectBtn);
-                    actionsDiv.appendChild(analyzeBtn);
-                    
-                    item.appendChild(nameSpan);
-                    item.appendChild(actionsDiv);
-                    
-                    if(activeFilename && activeFilename === fn){
-                        item.classList.add('active');
-                    }
-                    
-                    filesList.appendChild(item);
-                });
-            }
+    input && input.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); form && form.dispatchEvent(new Event('submit',{cancelable:true,bubbles:true})); } });
+    pagePrev && pagePrev.addEventListener('click', function(){ if(!lastPagination) return; const cur = lastPagination.current_page||1; const prev = Math.max(1, cur-1); sendChat(`show page ${prev}`, {showUser:true}); });
+    pageNext && pageNext.addEventListener('click', function(){ if(!lastPagination) return; const cur = lastPagination.current_page||1; const next = Math.min(lastPagination.total_pages||cur, cur+1); sendChat(`show page ${next}`, {showUser:true}); });
 
-            function fetchSession(){
-                return fetch('/api/v1/session')
-                    .then(r => r.json())
-                    .then(data => {
-                        if(data.username){
-                            document.getElementById('username').textContent = `${data.username}`;
-                        }
-                        if(Array.isArray(data.files)){
-                            renderFiles(data.files);
-                            if(data.active_file){
-                                setActiveFileLabel(data.active_file);
-                            }
-                        }
-                        return data;
-                    })
-                    .catch(err => {
-                        console.error('session API error', err);
-                        return {files: [], active_file: null};
-                    });
-            }
-
-            function selectFile(filename){
-                fetch('/select_file', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({filename})
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if(data && data.selected){
-                        setActiveFileLabel(data.selected);
-                        appendMessage(`Selected file: ${data.selected}`, 'bot');
-                        lastPagination = null;
-                        paginationControls.style.display = 'none';
-                    } else if(data && data.error){
-                        appendMessage(`Error: ${data.error}`, 'bot');
-                    }
-                })
-                .catch(err => {
-                    appendMessage('Error selecting file', 'bot');
-                    console.error('select error', err);
-                });
-            }
-
-            function autoAnalyze(filename){
-                fetch('/api/v1/auto_analyze', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({filename})
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if(data && data.head){
-                        appendMessage(`📊 Analysis of ${filename}`, 'bot');
-                        appendMessage(data.head, 'bot', {html: true});
-                        appendMessage(`📈 Statistical Summary`, 'bot');
-                        appendMessage(data.describe, 'bot', {html: true});
-                        if(data.histogram){
-                            appendMessage(`📉 Distribution Chart`, 'bot');
-                            appendMessage(data.histogram, 'bot', {html: true});
-                        }
-                    } else if(data && data.error){
-                        appendMessage(`Error: ${data.error}`, 'bot');
-                    }
-                })
-                .catch(err => {
-                    appendMessage('Auto-analyze failed', 'bot');
-                    console.error('auto-analyze error', err);
-                });
-            }
-
-            // Upload form handler
-            const uploadForm = document.querySelector('.upload-form');
-            uploadForm.addEventListener('submit', function(e){
-                e.preventDefault();
-                const fileInput = uploadForm.querySelector('input[type="file"]');
-                if(!fileInput || !fileInput.files || fileInput.files.length === 0) return;
-                const file = fileInput.files[0];
-                const fd = new FormData();
-                fd.append('file', file);
-                fetch('/upload', { method: 'POST', body: fd })
-                    .then(r => r.text())
-                    .then(text => {
-                        // Show success banner
-                        const banner = document.getElementById('success-banner');
-                        banner.style.display = 'block';
-                        setTimeout(() => { banner.style.display = 'none'; }, 5000);
-                        
-                        // Refresh file list and auto-select
-                        fetchSession();
-                        setTimeout(() => selectFile(file.name), 300);
-                        
-                        // Clear file input
-                        fileInput.value = '';
-                    })
-                    .catch(err => {
-                        appendMessage('Upload failed', 'bot');
-                        console.error('upload error', err);
-                    });
-            });
-
-            // Chat form handler
-            form.addEventListener('submit', function(e){
-                e.preventDefault();
-                const value = input.value.trim();
-                if(!value) return;
-                appendMessage(value, 'user');
-                input.value = '';
-                input.focus();
-                sendChat(value, {showUser:false});
-            });
-
-            function sendChat(message, opts){
-                opts = opts || {};
-                if(opts.showUser !== false){
-                    appendMessage(message, 'user');
-                }
-                return fetch('/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message })
-                })
-                .then(r => r.json())
-                .then(data => {
-                    if(data && data.answer){
-                        appendMessage(data.answer, 'bot', {html:true});
-                    } else if(data && data.response){
-                        appendMessage(data.response, 'bot', {html:true});
-                    } else if(data && data.error){
-                        appendMessage(`⚠️ ${data.error}`, 'bot');
-                    }
-                    
-                    if(data && data.pagination){
-                        lastPagination = data.pagination;
-                        pageInfo.textContent = `Page ${data.pagination.current_page} of ${data.pagination.total_pages}`;
-                        paginationControls.style.display = 'flex';
-                        pagePrev.disabled = data.pagination.current_page <= 1;
-                        pageNext.disabled = data.pagination.current_page >= data.pagination.total_pages;
-                    } else {
-                        lastPagination = null;
-                        paginationControls.style.display = 'none';
-                    }
-                    return data;
-                })
-                .catch(err => {
-                    appendMessage('Error: could not reach server', 'bot');
-                    console.error('chat error', err);
-                });
-            }
-
-            // Enter key to send
-            input.addEventListener('keydown', function(e){
-                if(e.key === 'Enter' && !e.shiftKey){
-                    e.preventDefault();
-                    form.dispatchEvent(new Event('submit', {cancelable:true, bubbles:true}));
-                }
-            });
-
-            // Pagination
-            pagePrev.addEventListener('click', function(){
-                if(!lastPagination) return;
-                const cur = lastPagination.current_page || 1;
-                const prev = Math.max(1, cur - 1);
-                sendChat(`show page ${prev}`, {showUser:true});
-            });
-            pageNext.addEventListener('click', function(){
-                if(!lastPagination) return;
-                const cur = lastPagination.current_page || 1;
-                const next = Math.min(lastPagination.total_pages || cur, cur + 1);
-                sendChat(`show page ${next}`, {showUser:true});
-            });
-
-            // Initialize
-            refreshBtn.addEventListener('click', fetchSession);
-            fetchSession();
-        })();
-    </script>
+    refreshBtn && refreshBtn.addEventListener('click', fetchSession);
+    fetchSession();
+})();
+</script>
 </body>
-</html>
 </html>
