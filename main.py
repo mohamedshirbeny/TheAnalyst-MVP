@@ -13,23 +13,154 @@
 # Finally, return a success message
 
 # Run the web server
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import pandas as pd
 import math
 import uuid
-
+from datetime import datetime
 from typing import Optional
+
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'change-me-for-prod')
+
+# Database configuration
+instance_path = os.path.join(os.path.dirname(__file__), 'instance')
+os.makedirs(instance_path, exist_ok=True)
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(instance_path, "project.db")}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# ============================================================================
+# DATABASE MODELS
+# ============================================================================
+
+class User(UserMixin, db.Model):
+    """User model for authentication"""
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationship to files
+    files = db.relationship('File', backref='owner', lazy=True, cascade='all, delete-orphan')
+    
+    def set_password(self, password):
+        """Hash and set the password"""
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        """Check if provided password matches the hash"""
+        return check_password_hash(self.password_hash, password)
+    
+    def __repr__(self):
+        return f'<User {self.username}>'
+
+
+class File(db.Model):
+    """File model to track uploaded files and their ownership"""
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(255), nullable=False)
+    upload_date = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    
+    def __repr__(self):
+        return f'<File {self.filename}>'
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    """Load user by ID for Flask-Login"""
+    return User.query.get(int(user_id))
+
+# ============================================================================
+# AUTHENTICATION ROUTES
+# ============================================================================
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """Register a new user"""
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        password_confirm = request.form.get('password_confirm', '').strip()
+        
+        # Validate input
+        if not username or not password:
+            return render_template('register.html', error='Username and password are required.')
+        
+        if len(password) < 6:
+            return render_template('register.html', error='Password must be at least 6 characters long.')
+        
+        if password != password_confirm:
+            return render_template('register.html', error='Passwords do not match.')
+        
+        # Check if user already exists
+        if User.query.filter_by(username=username).first():
+            return render_template('register.html', error='Username already taken.')
+        
+        # Create new user
+        try:
+            new_user = User(username=username)
+            new_user.set_password(password)
+            db.session.add(new_user)
+            db.session.commit()
+            return redirect(url_for('login'))
+        except Exception as e:
+            db.session.rollback()
+            return render_template('register.html', error=f'Registration failed: {str(e)}')
+    
+    return render_template('register.html')
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Login user"""
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        if not username or not password:
+            return render_template('login.html', error='Username and password are required.')
+        
+        # Find user in database
+        user = User.query.filter_by(username=username).first()
+        
+        if user and user.check_password(password):
+            # Login successful
+            login_user(user)
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='Invalid username or password.')
+    
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    """Logout user"""
+    logout_user()
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def index():
     return render_template('index.html')
+
 @app.route('/upload', methods=['POST'])
+@login_required
 def upload_file():
     if 'file' not in request.files:
         return "No file part"
@@ -37,23 +168,40 @@ def upload_file():
     if file.filename == '':
         return "No selected file"
     if file:
+        # Save file to disk
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(filepath)
+        
+        # Record file in database linked to current user
+        try:
+            new_file = File(filename=file.filename, user_id=current_user.id)
+            db.session.add(new_file)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return f"File saved but database error: {str(e)}"
+        
         return "File uploaded successfully"
 
 
 @app.route('/api/v1/session', methods=['GET'])
+@login_required
 def api_session():
-    # Combined endpoint: return both files list and active file for this session
-    allowed_exts = ('.csv', '.txt', '.xls', '.xlsx')
-    files = [f for f in os.listdir(UPLOAD_FOLDER)
-             if os.path.isfile(os.path.join(UPLOAD_FOLDER, f)) and f.lower().endswith(allowed_exts)]
+    # Combined endpoint: return both files list and active file for current user
+    # Only return files owned by the current user
+    user_files = File.query.filter_by(user_id=current_user.id).all()
+    files = [f.filename for f in user_files]
     files.sort()
     active = session.get('active_file')
-    return jsonify({'files': files, 'active_file': active}), 200
+    # Validate that active file belongs to current user
+    if active:
+        if not any(f.filename == active for f in user_files):
+            active = None
+    return jsonify({'files': files, 'active_file': active, 'username': current_user.username}), 200
 
 
 @app.route('/select_file', methods=['POST'])
+@login_required
 def select_file():
     data = request.get_json(silent=True) or {}
     filename = data.get('filename') if isinstance(data, dict) else None
@@ -67,9 +215,15 @@ def select_file():
     allowed_exts = ('.csv', '.txt', '.xls', '.xlsx')
     if not filename.lower().endswith(allowed_exts):
         return jsonify({'error': 'Invalid file extension'}), 400
+    
+    # CRITICAL SECURITY FIX: Verify file belongs to current user
+    user_file = File.query.filter_by(filename=filename, user_id=current_user.id).first()
+    if not user_file:
+        return jsonify({'error': 'File not found or access denied'}), 404
+    
     target = os.path.join(UPLOAD_FOLDER, filename)
     if not os.path.exists(target) or not os.path.isfile(target):
-        return jsonify({'error': 'File not found'}), 404
+        return jsonify({'error': 'File not found on disk'}), 404
 
     # set session active file
     session['active_file'] = filename
@@ -92,6 +246,7 @@ def select_file():
 
 
 @app.route('/chat', methods=['POST'])
+@login_required
 def chat():
     # Accept JSON payload with a 'message' field
     data = request.get_json(silent=True) or {}
@@ -106,17 +261,24 @@ def chat():
     plot_commands = lower.startswith('plot ')
     
     if lower in file_commands or lower.startswith('show page') or plot_commands:
-        # find active file from session (if set), otherwise fall back to newest data file
-        allowed_exts = ('.csv', '.txt', '.xls', '.xlsx')
-        active = session.get('active_file')
-        files = [f for f in os.listdir(UPLOAD_FOLDER)
-                 if os.path.isfile(os.path.join(UPLOAD_FOLDER, f)) and f.lower().endswith(allowed_exts)]
+        # CRITICAL SECURITY FIX: Only get files belonging to current user
+        user_files = File.query.filter_by(user_id=current_user.id).all()
+        files = [f.filename for f in user_files]
+        
         if not files:
-            return jsonify({'response': 'No uploaded data files found (allowed: .csv, .txt, .xls, .xlsx).'}), 200
-        if active and active in files:
+            return jsonify({'response': 'No uploaded data files found. Please upload a file first.'}), 200
+        
+        active = session.get('active_file')
+        # Verify active file belongs to current user
+        if active and not any(f.filename == active for f in user_files):
+            active = None
+        
+        if active:
             latest = active
         else:
-            latest = max(files, key=lambda f: os.path.getmtime(os.path.join(UPLOAD_FOLDER, f)))
+            # Get most recently uploaded file for current user
+            latest_file = max(user_files, key=lambda f: f.upload_date)
+            latest = latest_file.filename
         latest_path = os.path.join(UPLOAD_FOLDER, latest)
         # read dataframe
         df = None
@@ -265,18 +427,21 @@ def chat():
                     'model': 'none'
                 }), 200
             
-            # Load the active data file for context
-            allowed_exts = ('.csv', '.txt', '.xls', '.xlsx')
-            active = session.get('active_file')
-            files = [f for f in os.listdir(UPLOAD_FOLDER)
-                     if os.path.isfile(os.path.join(UPLOAD_FOLDER, f)) and f.lower().endswith(allowed_exts)]
+            # CRITICAL SECURITY FIX: Load only current user's files for AI context
+            user_files = File.query.filter_by(user_id=current_user.id).all()
             
             data_context = "No data file loaded."
-            if files:
-                if active and active in files:
+            if user_files:
+                active = session.get('active_file')
+                # Verify active file belongs to current user
+                if active and not any(f.filename == active for f in user_files):
+                    active = None
+                
+                if active:
                     latest = active
                 else:
-                    latest = max(files, key=lambda f: os.path.getmtime(os.path.join(UPLOAD_FOLDER, f)))
+                    latest_file = max(user_files, key=lambda f: f.upload_date)
+                    latest = latest_file.filename
                 latest_path = os.path.join(UPLOAD_FOLDER, latest)
                 
                 # Read dataframe for context
@@ -347,4 +512,9 @@ Please answer this question based on the data provided."""
             }), 200
 
 if __name__ == '__main__':
+    # Initialize the database
+    with app.app_context():
+        db.create_all()
+        print("Database initialized successfully.")
+    
     app.run(debug=True, use_reloader=False)
