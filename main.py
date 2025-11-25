@@ -17,6 +17,7 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy.orm import deferred
 import os
 import pandas as pd
 import math
@@ -52,7 +53,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    ai_query_count = db.Column(db.Integer, default=0)  # Track AI queries for Pro tier
+    ai_query_count = deferred(db.Column(db.Integer, default=0))  # Track AI queries for Pro tier (deferred to avoid old DB crash)
     
     # Relationship to files
     files = db.relationship('File', backref='owner', lazy=True, cascade='all, delete-orphan')
